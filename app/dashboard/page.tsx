@@ -53,8 +53,10 @@ export default async function DashboardPage({
         {issues.map(issue => (
           <div key={issue.id} className="p-6 border rounded-xl shadow-lg hover:shadow-2xl transition duration-300 bg-white">
             <h2 className="text-xl font-bold text-blue-700">{issue.title}</h2>
-            <p className="text-sm text-gray-500 mt-1">Repo: {issue.repo}</p>
+            <a className="text-sm text-gray-500 mt-1">Repo: {issue.repo}</a>
             <p className="mt-4 text-gray-700 line-clamp-3">{issue.body || 'No description provided.'}</p>
+          
+          {/* this will go to monaco editor */}
             <a 
               href={`/solve/${issue.id}`} 
               className="mt-4 inline-block px-4 py-2 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition"
