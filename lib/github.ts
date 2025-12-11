@@ -23,6 +23,7 @@ export async function getGoodFirstIssues(language: string) {
 
     return data.items.map(item => ({
       id: item.id,
+      number:item.number,
       title: item.title,
       repo: item.repository_url.split('/').slice(-2).join('/'),
       url: item.html_url,
