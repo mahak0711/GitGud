@@ -12,7 +12,7 @@ export const octokit = new Octokit({ auth: process.env.GITHUB_ACCESS_TOKEN });
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 export async function getGoodFirstIssues(language: string) {
   const q = `label:"good first issue" language:${language} state:open no:assignee is:issue`;
-  
+  await delay(500)
   try {
     const { data } = await octokit.rest.search.issuesAndPullRequests({
       q,
