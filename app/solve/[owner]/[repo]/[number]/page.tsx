@@ -1,68 +1,117 @@
 import { UserButton } from '@clerk/nextjs';
-import {CodeEditor} from '@/components/CodeEditor'
-
-// 💡 Mock Data: later we will fetch this real file content from GitHub
-const MOCK_FILE_CONTENT = `// Welcome to GitGud!
-// This is the file you need to fix.
-
-function calculateTotal(price, tax) {
-  // TODO: Fix the bug here. Tax is not being added correctly.
-  return price * tax; 
-}
-
-console.log(calculateTotal(100, 0.2));
-`;
-
-// Define the shape of the props for Next.js 15
+import { CodeEditor } from '@/components/CodeEditor';
+// 💡 We need the octokit client initialized in the library file
+import { octokit } from '@/lib/github'; 
+import { SolveWrapper } from '@/components/SolveWrapper';
+// Define the Props based on the new URL structure
 type SolvePageProps = {
-  params: Promise<{ issueId: string }>;
+  // 💡 Parameters are strongly typed to receive the three parts from the URL
+  params: Promise<{ owner: string; repo: string; number: string }>;
 };
 
 export default async function SolvePage({ params }: SolvePageProps) {
-  // 1. Unwrap the params Promise
-  const resolvedParams = await params;
-  const { issueId } = resolvedParams;
+  // 1. Unwrap the params Promise (required for Next.js 15)
+  const { owner, repo, number } = await params;
+  const issueNumber = parseInt(number); // GitHub API requires a number, not a string
 
+  // --- Data Variables ---
+  let issueTitle = `Issue #${number}`;
+  let issueBody = "Fetching issue details...";
+  let fileContent = "// Could not fetch file content.";
+  let filePath = "README.md"; // Default file to fetch
+  let language = "markdown"; // Default language for README
+
+  // ----------------------------------------------------
+  // 2. Fetch the REAL Issue Details (Title, Body)
+  // ----------------------------------------------------
+  try {
+    const { data: issue } = await octokit.rest.issues.get({
+      owner,
+      repo,
+      issue_number: issueNumber,
+    });
+    issueTitle = issue.title;
+    // Use the issue's original body for the left panel
+    issueBody = issue.body || "No detailed description provided by the maintainer.";
+    
+    // 💡 Logic for language hint (optional, but helpful for the editor)
+    // --- Start of FIX block ---
+
+// 💡 Logic for language hint (optional, but helpful for the editor)
+if (issue.labels && issue.labels.length > 0) {
+    const langLabel = issue.labels.find((label: any) => {
+        // 1. Type Narrowing: Check if the label is an object AND has a 'name' property.
+        if (typeof label === 'object' && label !== null && 'name' in label) {
+            // 2. Now it is safe to access the name and check for a match
+            const labelName = (label as { name: string }).name.toLowerCase();
+            return ['javascript', 'python', 'typescript', 'rust', 'go'].includes(labelName);
+        }
+        return false; // Ignore if it's just a string or missing the 'name' property
+    });
+
+    if (langLabel) {
+        // 3. Safely set the language, handling the object type again
+        language = (langLabel as { name: string }).name.toLowerCase();
+
+        // 💡 Bonus: If the language is found, set the file path to something more relevant than markdown
+        // (This prepares for the AI phase by setting a base language for the editor)
+        if (language === 'javascript' || language === 'typescript') {
+            language = 'typescript'; // Set to typescript for better JS/TS support in Monaco
+        } else if (language === 'python') {
+            language = 'python';
+        }
+        // If we found a language, we assume the code file is needed, not the README
+        filePath = `repo-file.${language.substring(0, 3)}.txt`;
+    }
+}
+// --- End of FIX block ---
+
+  } catch (e) {
+    console.error("Failed to fetch issue details:", e);
+    issueBody = `Error: Could not retrieve issue details for ${owner}/${repo}#${number}. Check token permissions.`;
+  }
+  
+  // ----------------------------------------------------
+  // 3. Fetch the REAL Code File (The README.md for now)
+  // ----------------------------------------------------
+  try {
+    const { data: readme } = await octokit.rest.repos.getReadme({
+      owner,
+      repo,
+      mediaType: { format: "raw" }, // Ask for raw text
+    });
+    fileContent = String(readme);
+    filePath = "README.md";
+  } catch (error) {
+    fileContent = "// No README found or access denied. The correct file path will be identified by AI in Phase 3.";
+    filePath = "initial.txt";
+  }
+
+  // --- Render the Workspace UI ---
   return (
-    <div className="flex flex-col h-screen bg-gray-50 overflow-hidden">
-      {/* Navbar */}
-      <header className="flex justify-between items-center p-4 border-b bg-white">
-        <div className="flex items-center gap-4">
-          <a href="/dashboard" className="text-black hover:text-gray-900">← Back</a>
-          <h1 className="font-bold text-xl text-amber-300">Fixing Issue #{issueId}</h1>
-        </div>
-        <UserButton />
-      </header>
+   <div className="flex flex-col h-screen bg-gray-50 overflow-hidden">
+      {/* Navbar */}
+<header className="flex justify-between items-center p-4 border-b bg-white">
+        <div className="flex items-center gap-4">
+          <a href="/dashboard" className="text-gray-500 hover:text-gray-900">← Back</a>
+          <h1 className="font-bold text-xl truncate max-w-xl">
+            {issueTitle} <span className="text-gray-400">({owner}/{repo})</span>
+          </h1>
+        </div>
+        <UserButton />
+      </header>
 
-      {/* Main Workspace Grid */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2">
-        
-        {/* Left Panel: The Problem */}
-        <div className="p-6 overflow-y-auto border-r bg-white">
-          <div className="bg-blue-50 border border-blue-100 rounded-lg p-6 mb-6">
-            <h2 className="text-lg font-bold text-black mb-2">Instructions</h2>
-            <p className="text-black">
-              The function <code>calculateTotal</code> is supposed to add tax to the price, 
-              but currently it multiplies it incorrectly. Fix the math!
-            </p>
-          </div>
-          
-          <h3 className="font-bold text-black mb-4">Discussion & Hints</h3>
-          <div className="h-64 bg-gray-100 rounded-lg flex items-center justify-center text-gray-500">
-            (AI Chat will go here in Phase 3)
-          </div>
-        </div>
-
-        {/* Right Panel: The Code Editor */}
-        <div className="h-full p-4 bg-gray-50">
-          <CodeEditor initialCode={MOCK_FILE_CONTENT} language="javascript" />
-          
-          <button className="mt-4 w-full py-3 bg-green-600 hover:bg-green-700 text-black font-bold rounded-lg transition shadow-md">
-            Submit Pull Request
-          </button>
-        </div>
-
-      </div>
-    </div>
+      {/* 💡 THE FIX: Use the SolveWrapper component here */}
+      <SolveWrapper
+        initialCode={fileContent}
+        initialIssueDescription={issueBody}
+        filePath={filePath}
+        language={language}
+        // Pass the repository coordinates, which the wrapper might need for future steps
+        owner={owner}
+        repo={repo}
+        number={number}
+      />
+    </div>
   );
 }

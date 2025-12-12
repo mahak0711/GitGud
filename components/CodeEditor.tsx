@@ -6,9 +6,10 @@ import { useState } from 'react';
 interface CodeEditorProps {
   initialCode: string;
   language?: string;
+  onCodeChange:(code:string)=>void;
 }
 
-export function CodeEditor({ initialCode, language = 'javascript' }: CodeEditorProps) {
+export function CodeEditor({ initialCode, language = 'javascript',onCodeChange}: CodeEditorProps) {
   // We track the code in state so we can eventually send it to the AI or GitHub
   const [code, setCode] = useState(initialCode);
 
@@ -27,7 +28,11 @@ export function CodeEditor({ initialCode, language = 'javascript' }: CodeEditorP
           defaultLanguage={language}
           theme="vs-dark" // The classic dark mode theme
           value={code}
-          onChange={(value) => setCode(value || '')}
+         onChange={(value) => {
+             const newCode = value || '';
+             setCode(newCode); 
+             onCodeChange(newCode); 
+           }}
           options={{
             minimap: { enabled: false }, // Saves space
             fontSize: 14,
