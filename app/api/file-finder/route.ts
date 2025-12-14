@@ -1,58 +1,97 @@
 import { NextResponse } from 'next/server';
-import { gemini } from '@/lib/gemini'; 
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { octokit } from '@/lib/github';
 
-// 💡 The Specialized System Prompt for the AI File Finder
-const FILE_FINDER_SYSTEM_PROMPT = `
-You are a highly specialized AI tool for identifying the single most relevant file path in a Git repository to fix a specified bug.
-
-IMPORTANT GUIDELINES:
-1. **Output Format:** Your entire output MUST be ONLY the single, most likely file path. DO NOT include any explanation, quotes, numbering, or introductory text. 
-2. **File Types:** Prioritize finding files with extensions like .js, .ts, .jsx, .tsx, .py, .java, .c, .go, or .rs.
-3. **If UNKNOWN:** If the path cannot be determined with high certainty, you MUST output the single word: UNKNOWN
-`;
+// Initialize Gemini
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 export async function POST(req: Request) {
   try {
-    const { issueTitle, issueBody } = await req.json();
+    const { issueTitle, issueBody, owner, repo } = await req.json();
 
-    if (!issueTitle || !issueBody) {
-      return NextResponse.json({ path: 'UNKNOWN' }, { status: 400 });
+    if (!owner || !repo) {
+        return NextResponse.json({ success: false, message: "Missing owner/repo" }, { status: 400 });
     }
 
-    // 1. Construct the prompt with context
-    const contextPrompt = `
-      Issue Title: "${issueTitle}"
-      Issue Description: "${issueBody}"
+    // --- 1. Fetch the Real File Structure ---
+    let fileListString = "";
+    try {
+        // Get the default branch (main/master)
+        const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
+        const defaultBranch = repoData.default_branch;
 
-      Based on this information, what is the single most likely file path in the repository that needs to be edited to fix this bug?
+        // Get the full tree (recursive)
+        const { data: treeData } = await octokit.rest.git.getTree({
+            owner,
+            repo,
+            tree_sha: defaultBranch,
+            recursive: 'true', 
+        });
+
+        // Filter out noise (images, huge folders, locks) to save AI tokens
+        const relevantFiles = treeData.tree
+            .filter((item) => item.type === 'blob') // Files only
+            .map((item) => item.path)
+            .filter((path) => 
+                path &&
+                !path.includes('node_modules') && 
+                !path.includes('.git/') &&
+                !path.includes('package-lock.json') &&
+                !path.includes('yarn.lock') &&
+                !path.match(/\.(png|jpg|jpeg|gif|svg|ico|pdf)$/) // No images
+            );
+
+        // Take top 600 files (Gemini Flash has a huge context window, so this is safe)
+        fileListString = relevantFiles.slice(0, 600).join('\n');
+
+    } catch (e) {
+        console.error("Failed to fetch tree for AI:", e);
+        fileListString = "(Could not fetch file structure. Please guess based on standard conventions.)";
+    }
+
+    // --- 2. Construct the "Architect" Prompt ---
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' }); // 1.5 Flash has huge context
+    
+    const prompt = `
+    You are a Senior Software Architect. I have a GitHub issue and the list of ALL files in the repository.
+    
+    YOUR GOAL: Identify the SINGLE file that most likely contains the code causing the issue.
+
+    CONTEXT:
+    Repo: ${owner}/${repo}
+    Issue Title: "${issueTitle}"
+    Issue Description: "${issueBody.slice(0, 2000)}"
+
+    ACTUAL REPOSITORY FILE STRUCTURE:
+    ---
+    ${fileListString}
+    ---
+
+    INSTRUCTIONS:
+    1. Analyze the issue to understand if it's a frontend bug, backend logic, style issue, etc.
+    2. Scan the "ACTUAL REPOSITORY FILE STRUCTURE" list above.
+    3. Select the ONE file path that is the best candidate for the fix.
+    4. Return ONLY the file path string. Do not add markdown, quotes, or explanations.
+    
+    Example Output:
+    src/components/Navbar.jsx
     `;
 
-    // 2. Call the Gemini API
-    // File: app/api/file-finder/route.ts
+    // --- 3. Generate Prediction ---
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text().trim();
 
-// ... inside the POST function's try block ...
+    // Clean up response (remove potential quotes or markdown)
+    const cleanedPath = text.replace(/`/g, '').replace(/'/g, '').replace(/"/g, '').trim();
 
-    // 2. Call the Gemini API
-    const response = await gemini.models.generateContent({
-      model: 'gemini-2.5-flash',
-      config: {
-        systemInstruction: FILE_FINDER_SYSTEM_PROMPT,
-      },
-      contents: [{ role: 'user', parts: [{ text: contextPrompt }] }],
-    });
+    console.log(`🤖 AI Predicted: ${cleanedPath}`);
 
-    
-    if (!response.text) {
-        console.error("Gemini returned no text for file path prediction.");
-        return NextResponse.json({ path: 'UNKNOWN' }, { status: 500 });
-    }
-    
-    const cleanPath = response.text.trim();
-
-    return NextResponse.json({ path: cleanPath });
+    return NextResponse.json({ path: cleanedPath });
 
   } catch (error) {
-    console.error('File Finder AI Error:', error);
-    return NextResponse.json({ path: 'UNKNOWN' }, { status: 500 });
+    console.error('AI File Finder Error:', error);
+    // Return a soft error so the UI handles it gracefully
+    return NextResponse.json({ path: null, error: 'Failed to predict file' }, { status: 500 });
   }
 }

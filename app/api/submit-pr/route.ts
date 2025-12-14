@@ -5,83 +5,88 @@ export async function POST(req: Request) {
   try {
     const { owner, repo, issueNumber, filePath, newContent } = await req.json();
 
-    if (!owner || !repo || !issueNumber || !filePath || !newContent) {
-      return NextResponse.json({ success: false, message: 'Missing required PR data.' }, { status: 400 });
-    }
+    // 1. Get the current authenticated user
+    const { data: user } = await octokit.rest.users.getAuthenticated();
+    const currentUser = user.login;
 
-    const branchName = `gitgud-fix-${issueNumber}-${Date.now()}`;
-    const commitMessage = `fix(issue-${issueNumber}): update ${filePath}`;
-    const prTitle = `Fix for #${issueNumber}: Updated ${filePath}`;
-    const prBody = `🤖 Solution automatically submitted by GitGud. Please review the changes for issue #${issueNumber}.`;
-    
-    // 1. Get the SHA of the base branch (usually 'main')
-    // Note: If the repo uses 'master', this might fail. We assume 'main' for now.
+    // 2. Check if we have WRITE access to the target repo
     const { data: repoData } = await octokit.rest.repos.get({ owner, repo });
+    const hasWriteAccess = repoData.permissions?.push;
     const defaultBranch = repoData.default_branch;
 
-    const { data: baseRef } = await octokit.rest.git.getRef({
-      owner,
-      repo,
-      ref: `heads/${defaultBranch}`,
-    });
-    const baseSha = baseRef.object.sha;
+    let headOwner = owner; // Where we will push the code
+    let headRepo = repo;
 
-    // 2. Create a new branch off the base branch
+    // 3. 💡 FORKING LOGIC: If we can't write, we MUST fork
+    if (!hasWriteAccess) {
+        console.log(`No write access to ${owner}/${repo}. Forking to ${currentUser}...`);
+        
+        // Create (or get existing) Fork
+        await octokit.rest.repos.createFork({ owner, repo });
+        
+        // Update target to be OUR fork
+        headOwner = currentUser;
+        headRepo = repo; // The repo name usually stays the same
+
+        // 🚨 CRITICAL: Forks take a few seconds to be ready. 
+        // In a real production app, we would poll. For now, we wait 2s.
+        await new Promise(r => setTimeout(r, 2000));
+    }
+
+    // 4. Create the Branch (on the HEAD repo - either ours or theirs)
+    const branchName = `gitgud-fix-${issueNumber}-${Date.now()}`;
+    const { data: baseRef } = await octokit.rest.git.getRef({
+      owner: headOwner, // Get ref from WHERE WE ARE PUSHING
+      repo: headRepo,
+      ref: `heads/${defaultBranch}`, // Usually checking out from main
+    });
+
     await octokit.rest.git.createRef({
-      owner,
-      repo,
+      owner: headOwner,
+      repo: headRepo,
       ref: `refs/heads/${branchName}`,
-      sha: baseSha,
+      sha: baseRef.object.sha,
     });
     
-    // 3. Get the SHA of the file we are modifying (required to update it)
-    // We use a try/catch in case the file is new, but usually it exists.
+    // 5. Update the File
+    // Get existing file SHA (if it exists in the fork/repo)
     let fileSha;
     try {
         const { data: fileData } = await octokit.rest.repos.getContent({
-        owner,
-        repo,
-        path: filePath,
-        ref: branchName, // Look at the new branch
+            owner: headOwner,
+            repo: headRepo,
+            path: filePath,
+            ref: branchName,
         }) as any;
         fileSha = fileData.sha;
-    } catch (e) {
-        // File might not exist, which is fine for new files
-    }
+    } catch (e) { /* File new? */ }
     
-    // 4. Create/Update the file in the new branch
     await octokit.rest.repos.createOrUpdateFileContents({
-      owner,
-      repo,
+      owner: headOwner,
+      repo: headRepo,
       path: filePath,
-      message: commitMessage,
-      content: Buffer.from(newContent, 'utf-8').toString('base64'), // Base64 encode
-      sha: fileSha, // omit if creating a new file
+      message: `fix(issue-${issueNumber}): update ${filePath}`,
+      content: Buffer.from(newContent, 'utf-8').toString('base64'),
+      sha: fileSha,
       branch: branchName,
     });
 
-    // 5. Create the Pull Request
+    // 6. Submit the Pull Request
+    // PR goes FROM headOwner:branch TO owner:defaultBranch
     const { data: pr } = await octokit.rest.pulls.create({
-      owner,
-      repo,
-      title: prTitle,
-      head: branchName, 
+      owner, // The ORIGINAL owner (e.g., code-charity)
+      repo,  // The ORIGINAL repo
+      title: `Fix for #${issueNumber}: Updated ${filePath}`,
+      head: `${headOwner}:${branchName}`, // Cross-repo format: "username:branch"
       base: defaultBranch,
-      body: prBody,
+      body: `🤖 Fix submitted via GitGud.`,
     });
 
-    return NextResponse.json({ 
-      success: true, 
-      message: 'Pull Request created successfully!', 
-      prUrl: pr.html_url 
-    });
+    return NextResponse.json({ success: true, prUrl: pr.html_url });
 
   } catch (error) {
     console.error('PR Submission Failed:', error);
-    const errorMessage = (error as { message?: string })?.message || 'Unknown error';
-    return NextResponse.json({ 
-      success: false, 
-      message: `Failed to create PR: ${errorMessage}` 
-    }, { status: 500 });
+    const msg = (error as any).response?.data?.message || (error as any).message;
+    return NextResponse.json({ success: false, message: msg }, { status: 500 });
   }
 }

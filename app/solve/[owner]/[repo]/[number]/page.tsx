@@ -4,33 +4,39 @@ import { SolveWrapper } from '@/components/SolveWrapper';
 
 // Define the Props based on the new URL structure
 type SolvePageProps = {
-  params: Promise<{ owner: string; repo: string; number: string }>;
+  params: Promise<{ owner: string; repo: string; number: string }>;
 };
 
 // --- Crucial: Define the Base URL for the Server-to-Server API call ---
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
 
 // --- Helper function to call the AI File Finder API ---
-async function getPredictedFilePath(title: string, body: string): Promise<string> {
-    try {
-        const response = await fetch(`${BASE_URL}/api/file-finder`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ issueTitle: title, issueBody: body }),
-            cache: 'no-store', 
-        });
+// 💡 FIXED: Added owner and repo parameters here
+async function getPredictedFilePath(title: string, body: string, owner: string, repo: string): Promise<string> {
+    try {
+        const response = await fetch(`${BASE_URL}/api/file-finder`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                issueTitle: title, 
+                issueBody: body,
+                owner, // 👈 Added
+                repo   // 👈 Added
+            }),
+            cache: 'no-store', 
+        });
 
-        if (!response.ok) {
-            return "UNKNOWN_ERROR";
-        }
+        if (!response.ok) {
+            return "UNKNOWN_ERROR";
+        }
 
-        const { path } = await response.json();
-        return path ? path.trim() : "UNKNOWN";
-        
-    } catch (e) {
-        console.error("Error calling file-finder API:", e);
-        return "UNKNOWN_ERROR";
-    }
+        const { path } = await response.json();
+        return path ? path.trim() : "UNKNOWN";
+        
+    } catch (e) {
+        console.error("Error calling file-finder API:", e);
+        return "UNKNOWN_ERROR";
+    }
 }
 
 // 💡 NEW HELPER: Guarantees a string result for README content, avoiding crash on 404
@@ -57,13 +63,12 @@ export default async function SolvePage({ params }: SolvePageProps) {
     let fileContent = "// Could not fetch file content.";
     let filePath = "README.md";
     let language = "markdown";
-    let readmeContent: string = "// Fallback README content."; // Variable to hold the guaranteed README
+    let readmeContent: string = "// Fallback README content."; 
 
     // ----------------------------------------------------
     // 2. Fetch the REAL Issue Details (Sequential, but necessary first step)
     // ----------------------------------------------------
     try {
-        // 💡 OPTIMIZATION: Start fetching the README content here in parallel with the issue fetch
         const [issueResponse, fetchedReadmeContent] = await Promise.all([
             octokit.rest.issues.get({ owner, repo, issue_number: issueNumber }),
             getReadmeContent(owner, repo)
@@ -85,8 +90,8 @@ export default async function SolvePage({ params }: SolvePageProps) {
     // 3. Fetch the REAL Code File (The AI Intelligent Fetch)
     // ----------------------------------------------------
     
-    // 💡 Ask the AI for the file path (Must run after issueBody is available)
-    let predictedPath = await getPredictedFilePath(issueTitle, issueBody);
+    // 💡 FIXED: Now passing owner and repo to the helper function
+    let predictedPath = await getPredictedFilePath(issueTitle, issueBody, owner, repo);
 
     predictedPath = predictedPath.replace(/^['"]|['"]$/g, '').replace(/^\//, '');
 
