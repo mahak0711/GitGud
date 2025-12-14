@@ -50,32 +50,32 @@ export async function POST(req: Request) {
     }
 
     // --- 2. Construct the "Architect" Prompt ---
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash-latest' }); // 1.5 Flash has huge context
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' }); // 1.5 Flash has huge context
     
     const prompt = `
-    You are a Senior Software Architect. I have a GitHub issue and the list of ALL files in the repository.
-    
-    YOUR GOAL: Identify the SINGLE file that most likely contains the code causing the issue.
+    You are a **highly specialized** Senior Software Architect. Your **sole responsibility** is to identify the single file most likely needing a code change to resolve a GitHub issue.
+    
+    YOUR GOAL: Identify the SINGLE file path that most likely contains the code causing the issue. **If the issue describes a UI/Styling bug, prioritize CSS/JS/TSX files. If it describes a data or logic bug, prioritize API routes or utility files.**
 
-    CONTEXT:
-    Repo: ${owner}/${repo}
-    Issue Title: "${issueTitle}"
-    Issue Description: "${issueBody.slice(0, 2000)}"
+    CONTEXT:
+    Repo: ${owner}/${repo}
+    Issue Title: "${issueTitle}"
+    Issue Description: "${issueBody.slice(0, 2000)}"
 
-    ACTUAL REPOSITORY FILE STRUCTURE:
-    ---
-    ${fileListString}
-    ---
+    ACTUAL REPOSITORY FILE STRUCTURE (choose from this list):
+    ---
+    ${fileListString}
+    ---
 
-    INSTRUCTIONS:
-    1. Analyze the issue to understand if it's a frontend bug, backend logic, style issue, etc.
-    2. Scan the "ACTUAL REPOSITORY FILE STRUCTURE" list above.
-    3. Select the ONE file path that is the best candidate for the fix.
-    4. Return ONLY the file path string. Do not add markdown, quotes, or explanations.
-    
-    Example Output:
-    src/components/Navbar.jsx
-    `;
+    **STRICT INSTRUCTIONS (Follow these rules above all else):**
+    1. **CRITICAL:** Return **ONLY** the single file path string.
+    2. **NEVER** include markdown formatting (like \` or \`\`\`), quotes, or any surrounding text.
+    3. Analyze the issue context and file list to make the best prediction.
+    4. The output must be a single line of text that is a valid file path from the list above.
+    
+    Example Output:
+    src/components/Navbar.jsx
+    `;
 
     // --- 3. Generate Prediction ---
     const result = await model.generateContent(prompt);
