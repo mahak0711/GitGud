@@ -3,7 +3,16 @@
 import React, { useState } from 'react';
 import { CodeEditor } from './CodeEditor';
 import { MentorChat } from './MentorChat'; 
-import { FileTree } from './FileTree'; // 👈 Import the new component
+import { FileTree } from './FileTree'; 
+import { 
+    MessageSquare, 
+    FolderTree, 
+    FileCode2, 
+    GitPullRequest, 
+    Loader2, 
+    CheckCircle2, 
+    XCircle 
+} from 'lucide-react';
 
 interface SolveWrapperProps {
   initialCode: string;
@@ -13,28 +22,37 @@ interface SolveWrapperProps {
   owner: string;
   repo: string;
   number: string;
+  issueId: string;
 }
 
-export function SolveWrapper({ initialCode, initialIssueDescription, filePath, language, owner, repo, number }: SolveWrapperProps) {
+export function SolveWrapper({ 
+  initialCode, 
+  initialIssueDescription, 
+  filePath, 
+  language, 
+  owner, 
+  repo, 
+  number, 
+  issueId 
+}: SolveWrapperProps) {
   const [currentCode, setCurrentCode] = useState(initialCode);
   const [currentFilePath, setCurrentFilePath] = useState(filePath);
   
-  // 💡 NEW STATE: Toggle between Chat and Files
+  // Toggle between Chat and Files
   const [activeTab, setActiveTab] = useState<'chat' | 'files'>('chat');
   
-  // 💡 NEW STATE: Loading state for manual file fetch
+  // Loading state for manual file fetch
   const [isFileLoading, setIsFileLoading] = useState(false);
 
   // For PR submission feedback
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [prStatus, setPrStatus] = useState<{ success: boolean | null, message: string | null, url: string | null }>({ success: null, message: null, url: null });
 
-  // ⚡ Helper: Fetch file content when user clicks in the File Tree
+  // Helper: Fetch file content when user clicks in the File Tree
   const handleFileSelect = async (path: string) => {
     setIsFileLoading(true);
-    setCurrentFilePath(path); // Update input field
+    setCurrentFilePath(path); 
     try {
-      // Call our new API to get the raw content
       const res = await fetch('/api/get-file-content', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -44,7 +62,6 @@ export function SolveWrapper({ initialCode, initialIssueDescription, filePath, l
       
       if (data.success) {
         setCurrentCode(data.content);
-        // Reset PR status when loading new file
         setPrStatus({ success: null, message: null, url: null });
       } else {
         alert('Failed to load file: ' + data.message);
@@ -77,7 +94,7 @@ export function SolveWrapper({ initialCode, initialIssueDescription, filePath, l
       const data = await response.json();
       
       if (data.success) {
-        setPrStatus({ success: true, message: '🎉 Success! Pull Request created.', url: data.prUrl });
+        setPrStatus({ success: true, message: 'Pull Request Created Successfully!', url: data.prUrl });
       } else {
         setPrStatus({ success: false, message: data.message || 'PR creation failed.', url: null });
       }
@@ -89,90 +106,159 @@ export function SolveWrapper({ initialCode, initialIssueDescription, filePath, l
   };
 
   return (
-    <div className="flex flex-grow w-full h-full"> 
-      <div className="grid grid-cols-1 lg:grid-cols-2 w-full h-full"> 
+    <div className="flex h-full w-full flex-col overflow-hidden bg-black text-zinc-300 md:flex-row"> 
+      
+      {/* =========================================================
+          LEFT PANEL: Sidebar (Explorer & Chat)
+      ========================================================= */}
+      <div className="flex h-[40vh] w-full flex-col border-b border-zinc-800 bg-zinc-900/50 md:h-full md:w-80 md:border-b-0 md:border-r lg:w-96 flex-shrink-0"> 
         
-        {/* LEFT PANEL: Sidebar with Tabs */}
-        <div className="border-r bg-white flex flex-col h-full overflow-hidden"> 
-          
-          {/* Tab Headers */}
-          <div className="flex border-b">
+        {/* Sidebar Tabs */}
+        <div className="flex items-center gap-1 border-b border-zinc-800 p-2">
             <button 
               onClick={() => setActiveTab('chat')}
-              className={`flex-1 py-3 text-sm font-bold border-b-2 transition ${activeTab === 'chat' ? 'border-blue-600 text-blue-600 bg-blue-50' : 'border-transparent text-gray-500 hover:bg-gray-50'}`}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all ${
+                activeTab === 'chat' 
+                  ? 'bg-zinc-800 text-white shadow-sm' 
+                  : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300'
+              }`}
             >
-              🤖 AI Mentor
+              <MessageSquare className="h-4 w-4" />
+              Mentor
             </button>
             <button 
               onClick={() => setActiveTab('files')}
-              className={`flex-1 py-3 text-sm font-bold border-b-2 transition ${activeTab === 'files' ? 'border-blue-600 text-blue-600 bg-blue-50' : 'border-transparent text-gray-500 hover:bg-gray-50'}`}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all ${
+                activeTab === 'files' 
+                  ? 'bg-zinc-800 text-white shadow-sm' 
+                  : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300'
+              }`}
             >
-              📂 File Browser
+              <FolderTree className="h-4 w-4" />
+              Files
             </button>
-          </div>
-
-          {/* Tab Content */}
-          <div className="flex-grow overflow-hidden relative">
-            
-            {/* 1. CHAT TAB */}
-            {activeTab === 'chat' && (
-              <div className="h-full flex flex-col p-4 overflow-y-auto">
-                <div className="bg-blue-50 border border-blue-100 rounded-lg p-4 mb-4 flex-shrink-0">
-                  <h2 className="text-lg font-bold text-blue-900 mb-2">The Issue:</h2>
-                  <p className="text-blue-800 whitespace-pre-wrap font-mono text-sm max-h-40 overflow-y-auto">
-                    {initialIssueDescription}
-                  </p>
-                </div>
-                <div className="flex-grow min-h-0">
-                  <MentorChat initialIssueDescription={initialIssueDescription} currentCode={currentCode} />
-                </div>
-              </div>
-            )}
-
-            {/* 2. FILES TAB */}
-            {activeTab === 'files' && (
-              <div className="h-full p-2 overflow-y-auto bg-gray-50">
-                <FileTree owner={owner} repo={repo} onSelectFile={handleFileSelect} />
-              </div>
-            )}
-
-          </div>
         </div>
 
-        {/* RIGHT PANEL: Editor */}
-        <div className="h-full p-4 bg-gray-50 flex flex-col">
-          {/* File Path Bar */}
-          <div className="mb-2 flex flex-col gap-1 flex-shrink-0">
-            <label className="text-xs font-bold text-gray-500 uppercase flex justify-between">
-              <span>Target File Path:</span>
-              {isFileLoading && <span className="text-blue-600 animate-pulse">Loading file...</span>}
-            </label>
+        {/* Sidebar Content Area */}
+        <div className="flex-grow overflow-hidden relative">
+          
+          {/* TAB: CHAT */}
+          {activeTab === 'chat' && (
+            <div className="flex h-full flex-col">
+              
+              {/* Context Block (Collapsible-ish) */}
+              <div className="shrink-0 border-b border-zinc-800 bg-zinc-900 p-4">
+                <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-zinc-500">
+                  Issue Context
+                </h3>
+                <div className="max-h-32 overflow-y-auto rounded-md bg-black/40 p-3 text-xs leading-relaxed text-zinc-400 scrollbar-thin scrollbar-thumb-zinc-700">
+                  {initialIssueDescription}
+                </div>
+              </div>
+
+              {/* Chat Component */}
+              <div className="flex-grow min-h-0 bg-black/20">
+                <MentorChat 
+                  initialIssueDescription={initialIssueDescription} 
+                  currentCode={currentCode} 
+                  issueId={issueId} 
+                />
+              </div>
+            </div>
+          )}
+
+          {/* TAB: FILES */}
+          {activeTab === 'files' && (
+            <div className="h-full overflow-y-auto bg-zinc-900/30 p-2 scrollbar-thin scrollbar-thumb-zinc-700">
+               <div className="mb-4 px-2 pt-2">
+                 <h3 className="text-xs font-bold uppercase tracking-wider text-zinc-500">Repository</h3>
+                 <p className="text-sm text-zinc-300">{owner}/{repo}</p>
+               </div>
+              <FileTree owner={owner} repo={repo} onSelectFile={handleFileSelect} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* =========================================================
+          RIGHT PANEL: Editor Area
+      ========================================================= */}
+      <div className="flex flex-grow flex-col h-full bg-[#1e1e1e]">
+        
+        {/* Editor Breadcrumb / Toolbar */}
+        <div className="flex h-10 shrink-0 items-center justify-between border-b border-zinc-800 bg-zinc-900 px-4">
+          <div className="flex items-center gap-2 text-sm text-zinc-400">
+            {isFileLoading ? (
+               <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+            ) : (
+               <FileCode2 className="h-4 w-4 text-blue-400" />
+            )}
+            
+            {/* Editable File Path */}
             <input 
                 type="text" 
                 value={currentFilePath}
                 onChange={(e) => setCurrentFilePath(e.target.value)}
-                className="border border-gray-300 p-2 rounded text-sm w-full font-mono text-gray-700 bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                className="min-w-[300px] bg-transparent font-mono text-zinc-200 outline-none focus:text-white"
+                spellCheck={false}
             />
           </div>
-          
-          <div className="flex-grow mb-4 relative border rounded-md overflow-hidden shadow-sm"> 
-            <CodeEditor initialCode={currentCode} language={language} onCodeChange={setCurrentCode} />
+          <div className="text-xs text-zinc-500">
+            {language}
           </div>
-          
-          {prStatus.message && (
-            <div className={`p-3 mb-2 rounded-lg text-sm text-center font-medium ${prStatus.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-              {prStatus.message}
-              {prStatus.url && <a href={prStatus.url} target="_blank" className="block mt-1 underline font-bold">View PR →</a>}
-            </div>
-          )}
+        </div>
+        
+        {/* Monaco Editor Container */}
+        <div className="flex-grow relative"> 
+          <CodeEditor initialCode={currentCode} language={language} onCodeChange={setCurrentCode} />
+        </div>
+        
+        {/* Bottom Action Bar (Terminal Style) */}
+        <div className="shrink-0 border-t border-zinc-800 bg-zinc-900 p-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                
+                {/* Status Message Area */}
+                <div className="flex items-center gap-2">
+                    {prStatus.message && (
+                        <div className={`flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${
+                            prStatus.success 
+                            ? 'bg-green-500/10 text-green-400' 
+                            : 'bg-red-500/10 text-red-400'
+                        }`}>
+                            {prStatus.success ? <CheckCircle2 className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                            {prStatus.message}
+                            {prStatus.url && (
+                                <a href={prStatus.url} target="_blank" className="ml-1 underline decoration-green-400 underline-offset-2 hover:text-green-300">
+                                    View PR
+                                </a>
+                            )}
+                        </div>
+                    )}
+                </div>
 
-          <button 
-            onClick={handleSubmit} 
-            disabled={isSubmitting}
-            className={`w-full py-3 font-bold rounded-lg transition shadow-md flex justify-center items-center gap-2 ${isSubmitting ? 'bg-gray-400' : 'bg-green-600 hover:bg-green-700 text-white'}`}
-          >
-            {isSubmitting ? 'Creating PR...' : 'Submit Pull Request'}
-          </button>
+                {/* Submit Button */}
+                <button 
+                    onClick={handleSubmit} 
+                    disabled={isSubmitting}
+                    className={`flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white transition-all ${
+                        isSubmitting 
+                        ? 'cursor-not-allowed bg-zinc-700 opacity-50' 
+                        : 'bg-green-600 hover:bg-green-500 hover:shadow-lg active:scale-95'
+                    }`}
+                >
+                    {isSubmitting ? (
+                        <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            <span>Pushing...</span>
+                        </>
+                    ) : (
+                        <>
+                            <GitPullRequest className="h-4 w-4" />
+                            <span>Submit Pull Request</span>
+                        </>
+                    )}
+                </button>
+            </div>
         </div>
 
       </div>

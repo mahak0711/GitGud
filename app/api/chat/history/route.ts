@@ -7,7 +7,7 @@ import { MessageModel, connectToDatabase } from '@/lib/db';
 
 // DELETE or COMMENT OUT the 'getSessionIdFromCookies' function
 
-export async function GET() {
+export async function GET(req: Request) {
     try {
         await connectToDatabase(); 
 
@@ -33,9 +33,14 @@ export async function GET() {
             });
         }
         // -----------------------------------------------------
+const { searchParams } = new URL(req.url);
+        const issueId = searchParams.get('issueId'); // 👈 Retrieve from URL
 
+        if (!issueId) {
+            return NextResponse.json({ success: true, history: [] }); // No ID, no history
+        }
         // 3. Find and return history
-        const history = await MessageModel.find({ sessionId })
+        const history = await MessageModel.find({ sessionId,issueId })
                                           .sort({ timestamp: 1 })
                                           .lean();
 

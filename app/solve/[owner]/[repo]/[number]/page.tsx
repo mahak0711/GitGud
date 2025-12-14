@@ -1,6 +1,14 @@
 import { UserButton } from '@clerk/nextjs';
-import { octokit } from '@/lib/github'; 
-import { SolveWrapper } from '@/components/SolveWrapper'; 
+import { octokit } from '@/lib/github';
+import { SolveWrapper } from '@/components/SolveWrapper';
+import Link from 'next/link';
+import { 
+    ChevronLeft, 
+    GitBranch, 
+    FileCode2, 
+    AlertTriangle, 
+    LayoutTemplate 
+} from 'lucide-react'; // Make sure to install lucide-react
 
 // Define the Props based on the new URL structure
 type SolvePageProps = {
@@ -11,7 +19,6 @@ type SolvePageProps = {
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
 
 // --- Helper function to call the AI File Finder API ---
-// 💡 FIXED: Added owner and repo parameters here
 async function getPredictedFilePath(title: string, body: string, owner: string, repo: string): Promise<string> {
     try {
         const response = await fetch(`${BASE_URL}/api/file-finder`, {
@@ -20,8 +27,8 @@ async function getPredictedFilePath(title: string, body: string, owner: string, 
             body: JSON.stringify({ 
                 issueTitle: title, 
                 issueBody: body,
-                owner, // 👈 Added
-                repo   // 👈 Added
+                owner, 
+                repo   
             }),
             cache: 'no-store', 
         });
@@ -53,10 +60,12 @@ const getReadmeContent = async (owner: string, repo: string): Promise<string> =>
     }
 };
 
-
 export default async function SolvePage({ params }: SolvePageProps) {
     const { owner, repo, number } = await params;
     const issueNumber = parseInt(number);
+
+    // 🎯 1. Generate the Unique Issue ID for Chat Persistence
+    const uniqueIssueId = `${owner}-${repo}-${number}`;
 
     let issueTitle = `Issue #${number}`;
     let issueBody = "Fetching issue details...";
@@ -64,9 +73,10 @@ export default async function SolvePage({ params }: SolvePageProps) {
     let filePath = "README.md";
     let language = "markdown";
     let readmeContent: string = "// Fallback README content."; 
+    let isAiError = false;
 
     // ----------------------------------------------------
-    // 2. Fetch the REAL Issue Details (Sequential, but necessary first step)
+    // 2. Fetch the REAL Issue Details 
     // ----------------------------------------------------
     try {
         const [issueResponse, fetchedReadmeContent] = await Promise.all([
@@ -78,7 +88,6 @@ export default async function SolvePage({ params }: SolvePageProps) {
         issueTitle = issue.title;
         issueBody = issue.body || "No detailed description provided by the maintainer.";
         
-        // Save the README content
         readmeContent = fetchedReadmeContent;
 
     } catch (e) {
@@ -87,23 +96,18 @@ export default async function SolvePage({ params }: SolvePageProps) {
     }
     
     // ----------------------------------------------------
-    // 3. Fetch the REAL Code File (The AI Intelligent Fetch)
+    // 3. Fetch the REAL Code File
     // ----------------------------------------------------
-    
-    // 💡 FIXED: Now passing owner and repo to the helper function
     let predictedPath = await getPredictedFilePath(issueTitle, issueBody, owner, repo);
-
     predictedPath = predictedPath.replace(/^['"]|['"]$/g, '').replace(/^\//, '');
 
     if (predictedPath === 'UNKNOWN' || predictedPath === 'UNKNOWN_ERROR' || !predictedPath) {
-        // AI Failed: Fallback to the pre-fetched README
         fileContent = `// AI failed to identify the file. Please check the issue description for file hints.\n\n` + readmeContent;
         filePath = "README.md (AI Failed)";
         language = "markdown";
+        isAiError = true;
     } else {
-        // AI Succeeded: Try to fetch the predicted file
         filePath = predictedPath;
-        
         try {
             const { data: fileData } = await octokit.rest.repos.getContent({
                 owner, repo, path: filePath,
@@ -113,7 +117,6 @@ export default async function SolvePage({ params }: SolvePageProps) {
             
             if (base64Content) {
                 fileContent = Buffer.from(base64Content, 'base64').toString('utf8');
-                // Set Language based on file extension
                 const ext = filePath.split('.').pop()?.toLowerCase();
                 if (ext === 'js' || ext === 'jsx') language = 'javascript';
                 else if (ext === 'ts' || ext === 'tsx') language = 'typescript';
@@ -124,34 +127,76 @@ export default async function SolvePage({ params }: SolvePageProps) {
             }
             
         } catch (error) {
-            // 🚨 UX FIX: File not found (404) - Use pre-fetched README
             const errorMessage = (error as { message?: string })?.message || 'Unknown error during file fetch.';
             console.error(`Could not fetch predicted file at path: ${filePath}. GitHub Error: ${errorMessage}`);
             
-            // Show the error message, then the actual README content
             fileContent = `// 🛑 ERROR: AI suggested file path '${filePath}', but it was not found on GitHub. Showing README.md instead.\n\n` + readmeContent;
             filePath = `README.md (AI Failed)`; 
             language = "markdown";
+            isAiError = true;
         }
     }
 
     // --- Render the Workspace UI ---
     return (
-        <div className="flex flex-col min-h-screen bg-gray-50"> 
+        <div className="flex h-screen w-full flex-col bg-white text-zinc-900 dark:bg-black dark:text-zinc-50 overflow-hidden"> 
             
-            {/* Navbar (Header) */}
-            <header className="flex justify-between items-center p-4 border-b bg-white flex-shrink-0">
+            {/* IDE Header */}
+            <header className="flex h-14 shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-950">
+                
+                {/* Left: Navigation & Context */}
                 <div className="flex items-center gap-4">
-                    <a href="/dashboard" className="text-gray-500 hover:text-gray-900">← Back</a>
-                    <h1 className="font-bold text-xl truncate max-w-xl">
-                        {issueTitle} <span className="text-gray-400">({owner}/{repo})</span>
-                    </h1>
+                    <Link 
+                        href="/dashboard" 
+                        className="flex items-center gap-1 rounded-md px-2 py-1.5 text-sm font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
+                    >
+                        <ChevronLeft className="h-4 w-4" />
+                        <span className="hidden sm:inline">Back</span>
+                    </Link>
+
+                    <div className="h-6 w-px bg-zinc-200 dark:bg-zinc-800" />
+
+                    <div className="flex flex-col">
+                        <div className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+                             <GitBranch className="h-3 w-3" />
+                             <span>{owner}</span>
+                             <span className="text-zinc-300 dark:text-zinc-700">/</span>
+                             <span>{repo}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm font-semibold leading-none text-zinc-900 dark:text-zinc-100">
+                            <span className="max-w-[150px] truncate sm:max-w-md">{issueTitle}</span>
+                            <span className="rounded-full bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                                #{issueNumber}
+                            </span>
+                        </div>
+                    </div>
                 </div>
-                <UserButton />
+
+                {/* Center: File Indicator (Desktop Only) */}
+                <div className="hidden items-center gap-2 rounded-md border border-zinc-100 bg-zinc-50 px-3 py-1.5 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 md:flex">
+                    {isAiError ? <AlertTriangle className="h-3.5 w-3.5 text-amber-500" /> : <FileCode2 className="h-3.5 w-3.5" />}
+                    <span className="font-mono">{filePath}</span>
+                </div>
+
+                {/* Right: User & Actions */}
+                <div className="flex items-center gap-3">
+                    <div className="hidden items-center gap-2 text-xs text-zinc-400 sm:flex">
+                        <LayoutTemplate className="h-4 w-4" />
+                        <span>Workspace</span>
+                    </div>
+                    <UserButton 
+                        appearance={{
+                            elements: {
+                                avatarBox: "h-8 w-8 border border-zinc-200 dark:border-zinc-700"
+                            }
+                        }}
+                    />
+                </div>
             </header>
 
-            {/* Wrapper container takes ALL remaining vertical space (flex-grow) */}
-            <div className="flex grow w-full"> 
+            {/* Main Workspace Area */}
+            {/* The 'grow' class ensures this div fills the rest of the screen height */}
+            <main className="flex grow overflow-hidden relative"> 
                 <SolveWrapper
                     initialCode={fileContent}
                     initialIssueDescription={issueBody}
@@ -160,8 +205,10 @@ export default async function SolvePage({ params }: SolvePageProps) {
                     owner={owner}
                     repo={repo}
                     number={number}
+                    // 🎯 2. Pass the unique ID to the Client Component Wrapper
+                    issueId={uniqueIssueId} 
                 />
-            </div>
+            </main>
         </div>
     );
 }

@@ -1,6 +1,15 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { 
+  Folder, 
+  FileCode2, 
+  File, 
+  ChevronLeft, 
+  Home, 
+  Loader2, 
+  AlertCircle 
+} from 'lucide-react';
 
 // Define what a file look like
 interface FileNode {
@@ -35,7 +44,12 @@ export function FileTree({ owner, repo, onSelectFile }: FileTreeProps) {
         const data = await res.json();
         
         if (data.success) {
-          setItems(data.items);
+          // Sort: Folders first, then files
+          const sortedItems = (data.items as FileNode[]).sort((a, b) => {
+            if (a.type === b.type) return a.name.localeCompare(b.name);
+            return a.type === 'dir' ? -1 : 1;
+          });
+          setItems(sortedItems);
         } else {
           setError(data.message || 'Failed to load folder');
         }
@@ -57,48 +71,73 @@ export function FileTree({ owner, repo, onSelectFile }: FileTreeProps) {
     setCurrentPath(parts.join('/'));
   };
 
+  // Helper to get icon based on type/extension
+  const getIcon = (type: 'file' | 'dir', name: string) => {
+    if (type === 'dir') return <Folder className="h-4 w-4 text-blue-400 fill-blue-400/10" />;
+    if (name.endsWith('.js') || name.endsWith('.ts') || name.endsWith('.tsx') || name.endsWith('.jsx')) {
+      return <FileCode2 className="h-4 w-4 text-yellow-500" />;
+    }
+    return <File className="h-4 w-4 text-zinc-500" />;
+  };
+
   return (
-    <div className="flex flex-col h-full bg-white border rounded-md shadow-sm overflow-hidden text-sm">
+    <div className="flex h-full flex-col bg-zinc-950 text-sm text-zinc-300">
       
-      {/* 1. Header / Breadcrumbs */}
-      <div className="p-2 bg-gray-100 border-b flex items-center gap-2">
-        <button 
-          onClick={handleGoBack}
-          disabled={!currentPath}
-          className={`px-2 py-1 rounded text-xs font-bold border transition
-            ${!currentPath 
-              ? 'text-gray-300 border-gray-200 cursor-not-allowed' 
-              : 'text-gray-600 border-gray-300 hover:bg-white bg-gray-50'}`}
-        >
-          ⬆ Up
-        </button>
-        <div className="truncate font-mono text-gray-600 text-xs flex-1" title={currentPath}>
-          {currentPath || '/ (root)'}
+      {/* 1. Header / Navigation Bar */}
+      <div className="flex h-10 shrink-0 items-center gap-2 border-b border-zinc-800 bg-zinc-900/50 px-3">
+        {currentPath ? (
+            <button 
+                onClick={handleGoBack}
+                className="flex items-center gap-1 rounded px-1.5 py-1 text-xs font-medium text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+                title="Go up one level"
+            >
+                <ChevronLeft className="h-3.5 w-3.5" />
+                Back
+            </button>
+        ) : (
+            <div className="flex items-center gap-1 px-1.5 py-1 text-xs font-medium text-zinc-500">
+                <Home className="h-3.5 w-3.5" />
+                <span>Root</span>
+            </div>
+        )}
+        
+        {/* Breadcrumb Display */}
+        <div className="h-4 w-px bg-zinc-800 mx-1"></div>
+        <div className="truncate font-mono text-xs text-zinc-500 flex-1" title={currentPath || '/'}>
+          {currentPath ? `/${currentPath}` : '/'}
         </div>
       </div>
 
       {/* 2. The File List */}
-      <div className="flex-grow overflow-y-auto p-2 space-y-1">
+      <div className="flex-grow overflow-y-auto p-2 scrollbar-thin scrollbar-thumb-zinc-800">
         
         {loading && (
-          <div className="flex justify-center p-4 text-gray-400 italic">
-            Loading...
+          <div className="flex flex-col items-center justify-center gap-2 py-8 text-zinc-500">
+            <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+            <span className="text-xs">Fetching contents...</span>
           </div>
         )}
 
         {error && (
-          <div className="p-4 text-red-500 text-center text-xs">
-            {error} <br/>
-            <button onClick={() => setCurrentPath('')} className="underline mt-1">
+          <div className="flex flex-col items-center justify-center gap-2 py-6 text-center text-xs text-red-400">
+            <AlertCircle className="h-5 w-5" />
+            <p>{error}</p>
+            <button 
+                onClick={() => setCurrentPath('')} 
+                className="mt-2 rounded bg-zinc-800 px-3 py-1 text-zinc-300 hover:bg-zinc-700"
+            >
               Return to Root
             </button>
           </div>
         )}
 
         {!loading && !error && items.length === 0 && (
-          <div className="text-gray-400 text-center p-4 italic">Empty folder.</div>
+          <div className="py-8 text-center text-xs text-zinc-600 italic">
+            Empty directory.
+          </div>
         )}
 
+        {/* File Items */}
         {!loading && !error && items.map((item) => (
           <div 
             key={item.path}
@@ -109,18 +148,17 @@ export function FileTree({ owner, repo, onSelectFile }: FileTreeProps) {
                 onSelectFile(item.path); // Tell parent to load this file
               }
             }}
-            className={`
-              flex items-center gap-2 p-2 rounded cursor-pointer transition select-none
-              ${item.type === 'dir' 
-                ? 'text-blue-700 hover:bg-blue-50 font-medium' 
-                : 'text-gray-700 hover:bg-gray-100'
-              }
-            `}
+            className="group flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors hover:bg-zinc-800/60 active:bg-zinc-800"
           >
-            <span className="opacity-70 text-base">
-              {item.type === 'dir' ? '📁' : '📄'}
+            {/* Icon */}
+            <span className="shrink-0">
+                {getIcon(item.type, item.name)}
             </span>
-            <span className="truncate">{item.name}</span>
+            
+            {/* Name */}
+            <span className={`truncate text-xs ${item.type === 'dir' ? 'font-semibold text-zinc-200' : 'text-zinc-400 group-hover:text-zinc-200'}`}>
+                {item.name}
+            </span>
           </div>
         ))}
       </div>

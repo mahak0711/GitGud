@@ -11,6 +11,7 @@ if (!MONGODB_URI) {
 // 1. Define the Message Schema
 const MessageSchema = new mongoose.Schema({
     sessionId: { type: String, required: true, index: true }, // Index for fast lookup by session ID
+    issueId: { type: String, required: true },
     role: { type: String, required: true }, // 'user' or 'model'
     content: { type: String, required: true },
     timestamp: { type: Date, default: Date.now },

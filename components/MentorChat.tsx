@@ -1,31 +1,35 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import { Send, Bot, User, Loader2, Sparkles } from 'lucide-react';
 
-// 1. UPDATED: Ensure the interface uses 'content'
+// 1. Interface matching the Database Schema
 interface Message {
   _id?: string;
   role: 'user' | 'mentor' | 'model'; 
-  content: string; // Renamed from 'text'
+  content: string; 
   timestamp?: string;
 }
 
 interface MentorChatProps {
   initialIssueDescription: string;
   currentCode: string; 
+  issueId: string; 
 }
 
-export function MentorChat({ initialIssueDescription, currentCode }: MentorChatProps) {
+export function MentorChat({ initialIssueDescription, currentCode, issueId }: MentorChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(true); 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // --- History Loading Logic (Remains mostly the same, ensuring role mapping) ---
+  // --- 1. Load History ---
   useEffect(() => {
     const fetchHistory = async () => {
+      setIsLoading(true); 
       try {
-        const response = await fetch('/api/chat/history');
+        const response = await fetch(`/api/chat/history?issueId=${issueId}`);
+        
         if (!response.ok) throw new Error('Failed to load chat history.');
         
         const data = await response.json();
@@ -34,10 +38,12 @@ export function MentorChat({ initialIssueDescription, currentCode }: MentorChatP
           const formattedHistory: Message[] = data.history.map((msg: any) => ({
             _id: msg._id,
             role: msg.role === 'user' ? 'user' : 'mentor', 
-            content: msg.content, // 2. CORRECTED: Access 'content' from the DB object
+            content: msg.content, 
             timestamp: msg.timestamp,
           }));
           setMessages(formattedHistory);
+        } else {
+            setMessages([]); 
         }
       } catch (error) {
         console.error("Error loading chat history:", error);
@@ -46,32 +52,36 @@ export function MentorChat({ initialIssueDescription, currentCode }: MentorChatP
       }
     };
 
-    fetchHistory();
-  }, []); 
+    if (issueId) {
+        fetchHistory();
+    }
+  }, [issueId]); 
 
+  // Scroll to bottom effect
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isLoading]); // Trigger on loading state change too (for thinking indicator)
 
+  // --- 2. Send Message ---
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    // 3. CORRECTED: Use 'content' when creating the new user message object
     const userPrompt = input.trim();
     const tempUserMessage: Message = { role: 'user', content: userPrompt }; 
 
+    // Optimistic Update
     setMessages((prev) => [...prev, tempUserMessage]);
     setInput('');
     setIsLoading(true);
 
     try {
-      // API call to the new persistent route
       const response = await fetch('/api/chat/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          prompt: userPrompt, // Sending the prompt content
+          prompt: userPrompt, 
+          issueId: issueId, 
           issue: initialIssueDescription,
           code: currentCode
         }),
@@ -84,14 +94,12 @@ export function MentorChat({ initialIssueDescription, currentCode }: MentorChatP
       const data = await response.json();
       
       if (data.success && data.message) {
-        // The API returns the SAVED AI message object, which uses 'content'
         const mentorMessage: Message = { 
             role: 'mentor', 
-            content: data.message.content, // Access 'content' from the API response
+            content: data.message.content, 
             _id: data.message._id 
         };
         
-        // Final State Update
         setMessages((prev) => {
           const confirmedMessages = prev.filter(msg => msg !== tempUserMessage);
           return [...confirmedMessages, { ...tempUserMessage, _id: data.message._id + "-user" }, mentorMessage];
@@ -105,7 +113,6 @@ export function MentorChat({ initialIssueDescription, currentCode }: MentorChatP
       console.error('Chat error:', error);
       setMessages((prev) => {
         const failedMessages = prev.filter(msg => msg !== tempUserMessage);
-        // 4. CORRECTED: Use 'content' for the error message
         return [...failedMessages, { role: 'mentor', content: 'Error: Failed to send message or get response.' }];
       });
     } finally {
@@ -113,65 +120,107 @@ export function MentorChat({ initialIssueDescription, currentCode }: MentorChatP
     }
   };
 
-  // --- Render ---
- return (
-    // 🎯 FIX: Replace h-full with a defined height class (e.g., h-96 or h-[500px])
-    // The h-[500px] class ensures the component takes up space regardless of its parent's height.
-    <div className="flex flex-col h-[500px] rounded-xl border border-gray-300 shadow-lg"> 
+  return (
+    // Changed to h-full to fill the parent sidebar container
+    <div className="flex h-full flex-col bg-zinc-950 text-zinc-300"> 
       
       {/* Message Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 rounded-t-xl bg-gray-50 border-b border-gray-200">
+      <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
         
-        {/* Loading Message Check */}
-        {isLoading && (
-          <div className="text-center text-gray-500 italic p-2 bg-white rounded-lg">
-            Loading chat history...
-          </div>
-        )}
-        
-        {/* Initial Prompt Message Check */}
+        {/* Empty State */}
         {!isLoading && messages.length === 0 && (
-          <div className="text-center text-gray-500 italic p-2 bg-white rounded-lg">
-              Ask your mentor for a hint! E.g., "Where is the bug in my current code?"
+          <div className="flex flex-col items-center justify-center space-y-3 py-10 opacity-60">
+              <div className="rounded-full bg-zinc-900 p-3">
+                <Sparkles className="h-6 w-6 text-blue-500" />
+              </div>
+              <p className="text-sm text-center">
+                I'm your AI Mentor. <br/> Ask me for a hint or help debugging!
+              </p>
           </div>
         )}
         
-        {/* Render Messages */}
-        {messages.map((msg, index) => (
-          // ... (Message rendering logic remains the same) ...
-          <div key={msg._id || index} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-xs md:max-w-md lg:max-w-lg p-3 rounded-xl shadow-sm ${
-              msg.role === 'user' 
-                ? 'bg-blue-600 text-white' 
-                : 'bg-yellow-100 text-gray-800' 
-            }`}>
-              {msg.content}
+        {/* Message Bubbles */}
+        {messages.map((msg, index) => {
+          const isUser = msg.role === 'user';
+          return (
+            <div key={msg._id || index} className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+              
+              {/* Avatar */}
+              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border ${
+                isUser 
+                  ? 'border-zinc-700 bg-zinc-800 text-zinc-300' 
+                  : 'border-blue-900/30 bg-blue-900/20 text-blue-400'
+              }`}>
+                {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+              </div>
+
+              {/* Bubble */}
+              <div className={`flex max-w-[85%] flex-col gap-1`}>
+                <div className={`relative rounded-lg px-4 py-2.5 text-sm leading-relaxed shadow-sm ${
+                  isUser 
+                    ? 'bg-zinc-800 text-zinc-100' 
+                    : 'bg-zinc-900/50 text-zinc-300 border border-zinc-800'
+                }`}>
+                  {/* Simple Markdown Simulation for Code Blocks */}
+                  <span className="whitespace-pre-wrap font-sans">
+                    {msg.content.split('```').map((part, i) => {
+                        if (i % 2 === 1) {
+                            // Code block style
+                            return (
+                                <code key={i} className="my-2 block rounded-md bg-black p-2 font-mono text-xs text-green-400">
+                                    {part.trim()}
+                                </code>
+                            )
+                        }
+                        return part;
+                    })}
+                  </span>
+                </div>
+                {/* Timestamp (Optional) */}
+                <span className={`text-[10px] text-zinc-600 ${isUser ? 'text-right' : 'text-left'}`}>
+                    {isUser ? 'You' : 'Mentor'}
+                </span>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
+
+        {/* Thinking Indicator */}
+        {isLoading && (
+            <div className="flex gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-blue-900/30 bg-blue-900/20 text-blue-400">
+                    <Bot className="h-4 w-4" />
+                </div>
+                <div className="flex items-center gap-1 rounded-lg border border-zinc-800 bg-zinc-900/50 px-4 py-3">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-500 [animation-delay:-0.3s]"></span>
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-500 [animation-delay:-0.15s]"></span>
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-zinc-500"></span>
+                </div>
+            </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Form */}
-      <form onSubmit={handleSubmit} className="p-4 border-t bg-white rounded-b-xl">
-        <div className="flex space-x-2">
+      {/* Input Area */}
+      <div className="border-t border-zinc-800 bg-zinc-900 p-3">
+        <form onSubmit={handleSubmit} className="relative flex items-center gap-2">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             disabled={isLoading}
-            placeholder={isLoading ? "Mentor is thinking..." : "Ask your mentor..."}
-            className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            placeholder={isLoading ? "Analyzing..." : "Ask a question about the code..."}
+            className="flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-4 py-2.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-50"
           />
           <button
             type="submit"
             disabled={isLoading || !input.trim()}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-400 transition"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-blue-600 text-white transition-colors hover:bg-blue-500 disabled:bg-zinc-800 disabled:text-zinc-600"
           >
-            {isLoading ? 'Wait' : 'Ask'}
+            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </button>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
   );
 }
