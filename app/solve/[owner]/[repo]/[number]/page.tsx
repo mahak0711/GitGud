@@ -8,17 +8,50 @@ import {
     FileCode2, 
     AlertTriangle, 
     LayoutTemplate 
-} from 'lucide-react'; // Make sure to install lucide-react
+} from 'lucide-react';
 
 // Define the Props based on the new URL structure
 type SolvePageProps = {
-  params: Promise<{ owner: string; repo: string; number: string }>;
+    params: Promise<{ owner: string; repo: string; number: string }>;
+};
+
+// --- Comprehensive Language Map ---
+// This map covers many common languages, ensuring wider support.
+const LANGUAGE_MAP: { [key: string]: string } = {
+    js: 'javascript',
+    jsx: 'javascript',
+    ts: 'typescript',
+    tsx: 'typescript',
+    py: 'python',
+    java: 'java',
+    go: 'go',
+    rs: 'rust',
+    rb: 'ruby',
+    c: 'c',
+    cpp: 'cpp',
+    cs: 'csharp',
+    html: 'html',
+    css: 'css',
+    scss: 'scss',
+    less: 'less',
+    md: 'markdown',
+    json: 'json',
+    yaml: 'yaml',
+    sh: 'shell',
+    xml: 'xml',
+    php: 'php',
+    swift: 'swift',
+    kt: 'kotlin',
+    sql: 'sql',
+    vue: 'vue',
+    svelte: 'svelte',
+    // Add more extensions as needed
 };
 
 // --- Crucial: Define the Base URL for the Server-to-Server API call ---
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
 
-// --- Helper function to call the AI File Finder API ---
+// --- Helper function to call the AI File Finder API (unchanged) ---
 async function getPredictedFilePath(title: string, body: string, owner: string, repo: string): Promise<string> {
     try {
         const response = await fetch(`${BASE_URL}/api/file-finder`, {
@@ -46,7 +79,7 @@ async function getPredictedFilePath(title: string, body: string, owner: string, 
     }
 }
 
-// 💡 NEW HELPER: Guarantees a string result for README content, avoiding crash on 404
+// 💡 NEW HELPER: Guarantees a string result for README content (unchanged)
 const getReadmeContent = async (owner: string, repo: string): Promise<string> => {
     try {
         const { data: readme } = await octokit.rest.repos.getReadme({ 
@@ -64,7 +97,6 @@ export default async function SolvePage({ params }: SolvePageProps) {
     const { owner, repo, number } = await params;
     const issueNumber = parseInt(number);
 
-    // 🎯 1. Generate the Unique Issue ID for Chat Persistence
     const uniqueIssueId = `${owner}-${repo}-${number}`;
 
     let issueTitle = `Issue #${number}`;
@@ -76,7 +108,7 @@ export default async function SolvePage({ params }: SolvePageProps) {
     let isAiError = false;
 
     // ----------------------------------------------------
-    // 2. Fetch the REAL Issue Details 
+    // 2. Fetch the REAL Issue Details (unchanged)
     // ----------------------------------------------------
     try {
         const [issueResponse, fetchedReadmeContent] = await Promise.all([
@@ -117,11 +149,11 @@ export default async function SolvePage({ params }: SolvePageProps) {
             
             if (base64Content) {
                 fileContent = Buffer.from(base64Content, 'base64').toString('utf8');
+                
+                // 🎯 FIX: Use the Comprehensive Language Map
                 const ext = filePath.split('.').pop()?.toLowerCase();
-                if (ext === 'js' || ext === 'jsx') language = 'javascript';
-                else if (ext === 'ts' || ext === 'tsx') language = 'typescript';
-                else if (ext === 'py') language = 'python';
-                else if (ext === 'md') language = 'markdown';
+                language = LANGUAGE_MAP[ext || ''] || 'plaintext'; // Default to 'plaintext' if extension is unknown
+                
             } else {
                 fileContent = `// File content could not be read. Path: ${filePath}`;
             }
@@ -137,7 +169,7 @@ export default async function SolvePage({ params }: SolvePageProps) {
         }
     }
 
-    // --- Render the Workspace UI ---
+    // --- Render the Workspace UI (unchanged) ---
     return (
         <div className="flex h-screen w-full flex-col bg-white text-zinc-900 dark:bg-black dark:text-zinc-50 overflow-hidden"> 
             
@@ -195,7 +227,6 @@ export default async function SolvePage({ params }: SolvePageProps) {
             </header>
 
             {/* Main Workspace Area */}
-            {/* The 'grow' class ensures this div fills the rest of the screen height */}
             <main className="flex grow overflow-hidden relative"> 
                 <SolveWrapper
                     initialCode={fileContent}
@@ -205,7 +236,6 @@ export default async function SolvePage({ params }: SolvePageProps) {
                     owner={owner}
                     repo={repo}
                     number={number}
-                    // 🎯 2. Pass the unique ID to the Client Component Wrapper
                     issueId={uniqueIssueId} 
                 />
             </main>
