@@ -1,9 +1,8 @@
 import { UserButton } from '@clerk/nextjs';
 import { getGoodFirstIssues } from '@/lib/github';
 import Link from 'next/link';
-import { ArrowUpRight, Github, Terminal } from 'lucide-react'; // Ensure you have lucide-react or replace with SVGs
+import { ArrowUpRight, Github, Terminal } from 'lucide-react'; 
 
-// 💡 FIX: We now use 'await' on the searchParams object itself before accessing any properties.
 type DashboardPageProps = {
   searchParams: Promise<{ lang?: string }>;
 };
@@ -12,23 +11,21 @@ export default async function DashboardPage({
   searchParams 
 }: DashboardPageProps) {
   
-  // 1. Await and destructure the resolved searchParams object. (Fix for Next.js 15)
   const resolvedSearchParams = await searchParams;
-
-  // 2. Determine the language from the URL.
   const language = resolvedSearchParams.lang || 'javascript';
-  
-  // 3. Fetch issues based on the dynamic language
   const issues = await getGoodFirstIssues(language);
   
-  const techStacks = ['javascript', 'python', 'typescript', 'rust', 'go'];
+  const techStacks = [
+    'javascript', 'typescript', 'python', 'java', 'go', 'rust', 'c++',
+    'c#', 'ruby', 'php', 'swift', 'kotlin', 'scala', 'haskell', 'elixir', 'dart'
+  ];
 
   return (
     <div className="min-h-screen bg-white text-zinc-900 dark:bg-black dark:text-zinc-50">
       <div className="mx-auto max-w-7xl px-6 py-10">
         
         {/* Header Section */}
-        <div className="mb-10 flex items-center justify-between border-b border-zinc-200 pb-6 dark:border-zinc-800">
+        <div className="mb-8 flex flex-col justify-between gap-4 border-b border-zinc-200 pb-6 md:flex-row md:items-center dark:border-zinc-800">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-white">
               Issue Feed
@@ -50,29 +47,34 @@ export default async function DashboardPage({
           />
         </div>
         
-        {/* Modern Filter Bar (Scrollable on mobile) */}
-        <div className="mb-8 flex items-center gap-3 overflow-x-auto pb-2 scrollbar-hide">
-          {techStacks.map(stack => {
-            const isActive = language === stack;
-            return (
-              <Link 
-                key={stack}
-                href={`/dashboard?lang=${stack}`} 
-                className={`flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition-all ${
-                  isActive 
-                    ? 'bg-zinc-900 text-white shadow-md dark:bg-white dark:text-black' 
-                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800'
-                }`}
-              >
-                {/* Simple dot indicator for active state */}
-                {isActive && <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />}
-                {stack.charAt(0).toUpperCase() + stack.slice(1)}
-              </Link>
-            );
-          })}
+        {/* NEW: Filter Section (Tag Cloud - No Scrollbar) */}
+        <div className="mb-10">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
+                Filter by Technology
+            </h3>
+            <div className="flex flex-wrap gap-2">
+                {techStacks.map(stack => {
+                    const isActive = language === stack;
+                    return (
+                    <Link 
+                        key={stack}
+                        href={`/dashboard?lang=${stack.toLowerCase()}`} 
+                        className={`
+                            flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-all
+                            ${isActive 
+                                ? 'border-zinc-900 bg-zinc-900 text-white dark:border-white dark:bg-white dark:text-black' 
+                                : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:bg-zinc-800'
+                            }
+                        `}
+                    >
+                        {stack.charAt(0).toUpperCase() + stack.slice(1)}
+                    </Link>
+                    );
+                })}
+            </div>
         </div>
         
-        {/* Issues Grid */}
+        {/* Issues Grid (Unchanged) */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {issues.length === 0 && (
             <div className="col-span-full py-20 text-center">
@@ -85,7 +87,6 @@ export default async function DashboardPage({
           )}
           
           {issues.map(issue => {
-            // 💡 LOGIC: Extract owner and repo
             const [owner, repoName] = issue.repo.split('/'); 
 
             return (
