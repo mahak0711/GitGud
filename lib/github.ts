@@ -10,7 +10,7 @@ export const octokit = new Octokit({ auth: process.env.GITHUB_ACCESS_TOKEN });
  */
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-export async function getGoodFirstIssues(language: string) {
+export async function getGoodFirstIssues(language: string,page:number=1) {
   const q = `label:"good first issue" language:${language} state:open no:assignee is:issue`;
   await delay(500)
   try {
@@ -18,7 +18,8 @@ export async function getGoodFirstIssues(language: string) {
       q,
       sort: "updated",
       order: "desc",
-      per_page: 20,
+      per_page: 15,
+      page:page,
     });
 
     return data.items.map(item => ({

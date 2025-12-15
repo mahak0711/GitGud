@@ -1,10 +1,14 @@
 import { UserButton } from '@clerk/nextjs';
-import { getGoodFirstIssues } from '@/lib/github';
+import { getGoodFirstIssues } from '@/lib/github'; 
 import Link from 'next/link';
-import { ArrowUpRight, Github, Terminal } from 'lucide-react'; 
+import { ArrowUpRight, Github, Terminal, ChevronLeft, ChevronRight } from 'lucide-react'; 
+import { redirect } from 'next/navigation'; // 🎯 CRITICAL: Import Next.js redirect function
+
+// Define the maximum number of issues per page (GitHub Search API default max is 30)
+const ISSUES_PER_PAGE = 15;
 
 type DashboardPageProps = {
-  searchParams: Promise<{ lang?: string }>;
+  searchParams: Promise<{ lang?: string; page?: string }>;
 };
 
 export default async function DashboardPage({ 
@@ -12,13 +16,34 @@ export default async function DashboardPage({
 }: DashboardPageProps) {
   
   const resolvedSearchParams = await searchParams;
+
+  // 1. DETERMINE LANGUAGE AND PAGE NUMBER
   const language = resolvedSearchParams.lang || 'javascript';
-  const issues = await getGoodFirstIssues(language);
+  const currentPage = parseInt(resolvedSearchParams.page || '1'); 
+  
+  // 2. FETCH ISSUES (Requires backend to pass 'page' to GitHub API)
+  const issues = await getGoodFirstIssues(language, currentPage); 
+  
+  // 🎯 CRITICAL FIX: REDIRECT IF LANDING ON AN EMPTY PAGE BEYOND PAGE 1
+  if (issues.length === 0 && currentPage > 1) {
+    // If the issues list is empty, and we are not on the first page, 
+    // it means the requested page doesn't exist. Redirect back to the last valid page (currentPage - 1).
+    const previousPageLink = `/dashboard?lang=${language.toLowerCase()}&page=${currentPage - 1}`;
+    redirect(previousPageLink);
+  }
+  // --- End Critical Fix ---
   
   const techStacks = [
     'javascript', 'typescript', 'python', 'java', 'go', 'rust', 'c++',
     'c#', 'ruby', 'php', 'swift', 'kotlin', 'scala', 'haskell', 'elixir', 'dart'
   ];
+
+  // Logic for pagination controls
+  const hasPreviousPage = currentPage > 1;
+  const hasNextPage = issues.length === ISSUES_PER_PAGE; 
+
+  const getPaginationLink = (page: number) => 
+    `/dashboard?lang=${language.toLowerCase()}&page=${page}`;
 
   return (
     <div className="min-h-screen bg-white text-zinc-900 dark:bg-black dark:text-zinc-50">
@@ -47,7 +72,7 @@ export default async function DashboardPage({
           />
         </div>
         
-        {/* NEW: Filter Section (Tag Cloud - No Scrollbar) */}
+        {/* Filter Section (Tag Cloud) */}
         <div className="mb-10">
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
                 Filter by Technology
@@ -58,7 +83,8 @@ export default async function DashboardPage({
                     return (
                     <Link 
                         key={stack}
-                        href={`/dashboard?lang=${stack.toLowerCase()}`} 
+                        // Reset page to 1 when changing stack
+                        href={`/dashboard?lang=${stack.toLowerCase()}&page=1`} 
                         className={`
                             flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-all
                             ${isActive 
@@ -74,7 +100,7 @@ export default async function DashboardPage({
             </div>
         </div>
         
-        {/* Issues Grid (Unchanged) */}
+        {/* Issues Grid */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {issues.length === 0 && (
             <div className="col-span-full py-20 text-center">
@@ -108,12 +134,11 @@ export default async function DashboardPage({
                     </span>
                   </div>
 
-                  {/* Title */}
+                  {/* Title and Description */}
                   <h2 className="mt-4 line-clamp-2 text-lg font-bold leading-tight text-zinc-900 group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400">
                     {issue.title}
                   </h2>
 
-                  {/* Description */}
                   <p className="mt-3 line-clamp-3 text-sm text-zinc-600 dark:text-zinc-400">
                     {issue.body || 'No description provided. Click to view more details on the challenge page.'}
                   </p>
@@ -133,6 +158,38 @@ export default async function DashboardPage({
             );
           })}
         </div>
+        
+        {/* Pagination Footer */}
+        <div className="mt-12 flex items-center justify-between">
+            <Link 
+                href={hasPreviousPage ? getPaginationLink(currentPage - 1) : '#'}
+                className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                    hasPreviousPage 
+                        ? 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800'
+                        : 'border-zinc-100 bg-zinc-50 text-zinc-400 cursor-not-allowed dark:border-zinc-800 dark:bg-zinc-900'
+                }`}
+            >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+            </Link>
+
+            <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
+                Page {currentPage}
+            </span>
+
+            <Link 
+                href={hasNextPage ? getPaginationLink(currentPage + 1) : '#'}
+                className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                    hasNextPage 
+                        ? 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800'
+                        : 'border-zinc-100 bg-zinc-50 text-zinc-400 cursor-not-allowed dark:border-zinc-800 dark:bg-zinc-900'
+                }`}
+            >
+                Next
+                <ChevronRight className="h-4 w-4" />
+            </Link>
+        </div>
+
       </div>
     </div>
   );
