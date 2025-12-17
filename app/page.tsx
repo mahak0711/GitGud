@@ -45,7 +45,7 @@ export default function Home() {
           </a>
 
           <a
-            href="https://github.com/your-project-link"
+            href="https://github.com/mahak0711/GitGud"
             target="_blank"
             rel="noopener noreferrer"
             className="flex h-12 w-full items-center justify-center gap-2 rounded-full border border-zinc-200 bg-transparent px-8 font-medium text-zinc-900 transition-colors hover:bg-zinc-100 dark:border-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-900 sm:w-auto"
