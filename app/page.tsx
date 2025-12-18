@@ -38,7 +38,7 @@ export default function Home() {
             <HoverBorderGradient
               containerClassName="rounded-full"
               as="button"
-              className="flex h-12 items-center justify-center gap-2 bg-white px-8 text-black dark:bg-black dark:text-white"
+              className="flex h-12 items-center cursor-pointer justify-center gap-2 bg-white px-8 text-black dark:bg-black dark:text-white"
             >
               <span>Start Solving</span>
             </HoverBorderGradient>
