@@ -24,7 +24,7 @@ export function StartChallengeButton({ owner, repo, number }: Props) {
     <button 
       onClick={handleStart}
       disabled={isPending}
-      className="flex w-full items-center justify-center gap-2 rounded-lg bg-zinc-900 py-2.5 text-sm font-semibold text-white transition-all active:scale-95 dark:bg-white dark:text-black hover:opacity-90 disabled:opacity-70 disabled:cursor-not-allowed"
+      className="flex w-full items-center cursor-pointer justify-center gap-2 rounded-lg bg-zinc-900 py-2.5 text-sm font-semibold text-white transition-all active:scale-95 dark:bg-white dark:text-black hover:opacity-90 disabled:opacity-70 disabled:cursor-not-allowed"
     >
       {isPending ? (
         <>
