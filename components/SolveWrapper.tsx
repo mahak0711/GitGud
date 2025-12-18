@@ -1,5 +1,6 @@
 'use client';
-
+import { useTransition } from "react";
+import { useRouter } from "next/navigation";
 import React, { useState } from 'react';
 import { CodeEditor } from './CodeEditor';
 import { MentorChat } from './MentorChat'; 
@@ -35,6 +36,7 @@ export function SolveWrapper({
   number, 
   issueId 
 }: SolveWrapperProps) {
+  
   const [currentCode, setCurrentCode] = useState(initialCode);
   const [currentFilePath, setCurrentFilePath] = useState(filePath);
   
@@ -157,7 +159,7 @@ export function SolveWrapper({
               </div>
 
               {/* Chat Component */}
-              <div className="flex-grow min-h-0 bg-black/20">
+              <div className="flex grow min-h-0 bg-black/20">
                 <MentorChat 
                   initialIssueDescription={initialIssueDescription} 
                   currentCode={currentCode} 

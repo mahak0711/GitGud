@@ -3,7 +3,7 @@ import { getGoodFirstIssues } from '@/lib/github';
 import Link from 'next/link';
 import { ArrowUpRight, Github, Terminal, ChevronLeft, ChevronRight } from 'lucide-react'; 
 import { redirect } from 'next/navigation'; // 🎯 CRITICAL: Import Next.js redirect function
-
+import { StartChallengeButton } from '@/components/StartChallengeButton';
 // Define the maximum number of issues per page (GitHub Search API default max is 30)
 const ISSUES_PER_PAGE = 15;
 
@@ -145,14 +145,12 @@ export default async function DashboardPage({
                 </div>
               
                 {/* Footer Action */}
-                <div className="mt-6 pt-4 border-t border-zinc-100 dark:border-zinc-800/50">
-                    <Link 
-                        href={`/solve/${owner}/${repoName}/${issue.number}`} 
-                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-zinc-900 py-2.5 text-sm font-semibold text-white transition-transform active:scale-95 dark:bg-white dark:text-black hover:opacity-90"
-                    >
-                        Start Challenge 
-                        <ArrowUpRight className="h-4 w-4" />
-                    </Link>
+               <div className="mt-6 pt-4 border-t border-zinc-100 dark:border-zinc-800/50">
+                    <StartChallengeButton 
+                        owner={owner} 
+                        repo={repoName} 
+                        number={issue.number} 
+                    />
                 </div>
               </div>
             );
