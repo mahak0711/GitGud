@@ -1,10 +1,11 @@
+
 import { UserButton } from '@clerk/nextjs';
 import { getGoodFirstIssues } from '@/lib/github'; 
 import Link from 'next/link';
 import { ArrowUpRight, Github, Terminal, ChevronLeft, ChevronRight } from 'lucide-react'; 
-import { redirect } from 'next/navigation'; // 🎯 CRITICAL: Import Next.js redirect function
+import { redirect } from 'next/navigation';
 import { StartChallengeButton } from '@/components/StartChallengeButton';
-// Define the maximum number of issues per page (GitHub Search API default max is 30)
+
 const ISSUES_PER_PAGE = 15;
 
 type DashboardPageProps = {
@@ -16,29 +17,21 @@ export default async function DashboardPage({
 }: DashboardPageProps) {
   
   const resolvedSearchParams = await searchParams;
-
-  // 1. DETERMINE LANGUAGE AND PAGE NUMBER
   const language = resolvedSearchParams.lang || 'javascript';
   const currentPage = parseInt(resolvedSearchParams.page || '1'); 
   
-  // 2. FETCH ISSUES (Requires backend to pass 'page' to GitHub API)
   const issues = await getGoodFirstIssues(language, currentPage); 
   
-  // 🎯 CRITICAL FIX: REDIRECT IF LANDING ON AN EMPTY PAGE BEYOND PAGE 1
   if (issues.length === 0 && currentPage > 1) {
-    // If the issues list is empty, and we are not on the first page, 
-    // it means the requested page doesn't exist. Redirect back to the last valid page (currentPage - 1).
     const previousPageLink = `/dashboard?lang=${language.toLowerCase()}&page=${currentPage - 1}`;
     redirect(previousPageLink);
   }
-  // --- End Critical Fix ---
   
   const techStacks = [
     'javascript', 'typescript', 'python', 'java', 'go', 'rust', 'c++',
     'c#', 'ruby', 'php', 'swift', 'kotlin', 'scala', 'haskell', 'elixir', 'dart'
   ];
 
-  // Logic for pagination controls
   const hasPreviousPage = currentPage > 1;
   const hasNextPage = issues.length === ISSUES_PER_PAGE; 
 
@@ -72,9 +65,9 @@ export default async function DashboardPage({
           />
         </div>
         
-        {/* Filter Section (Tag Cloud) */}
+        {/* Tech Stack Filters */}
         <div className="mb-10">
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-500">
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">
                 Filter by Technology
             </h3>
             <div className="flex flex-wrap gap-2">
@@ -83,7 +76,6 @@ export default async function DashboardPage({
                     return (
                     <Link 
                         key={stack}
-                        // Reset page to 1 when changing stack
                         href={`/dashboard?lang=${stack.toLowerCase()}&page=1`} 
                         className={`
                             flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm font-medium transition-all
@@ -102,92 +94,96 @@ export default async function DashboardPage({
         
         {/* Issues Grid */}
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {issues.length === 0 && (
+          {issues.length === 0 ? (
             <div className="col-span-full py-20 text-center">
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-900">
-                    <Terminal className="h-8 w-8 text-zinc-400" />
-                </div>
-                <h3 className="text-lg font-medium">No issues found for {language}</h3>
-                <p className="text-zinc-500">Try selecting a different tech stack above.</p>
+                <Terminal className="mx-auto h-12 w-12 text-zinc-400 mb-4" />
+                <h3 className="text-lg font-medium">No issues found</h3>
+                <p className="text-zinc-500">Try another language.</p>
             </div>
-          )}
-          
-          {issues.map(issue => {
-            const [owner, repoName] = issue.repo.split('/'); 
+          ) : (
+            issues.map(issue => {
+              const [owner, repoName] = issue.repo.split('/'); 
 
-            return (
-              <div 
-                key={issue.id} 
-                className="group relative flex flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-6 transition-all hover:border-zinc-300 hover:shadow-lg dark:border-zinc-800 dark:bg-zinc-900/50 dark:hover:border-zinc-700 dark:hover:bg-zinc-900"
-              >
-                <div>
-                  {/* Card Header */}
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                        <Github className="h-4 w-4" />
-                        <span>{owner}</span>
-                        <span className="text-zinc-300 dark:text-zinc-700">/</span>
-                        <span className="text-zinc-900 dark:text-zinc-200">{repoName}</span>
+              return (
+                <div 
+                  key={issue.id} 
+                  className="group flex flex-col justify-between rounded-2xl border border-zinc-200 bg-white p-5 transition-all hover:shadow-xl hover:border-blue-500/30 dark:border-zinc-800 dark:bg-zinc-900/50 dark:hover:bg-zinc-900"
+                >
+                  <div className="flex-grow">
+                    {/* Repository Path */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-500">
+                          <Github className="h-3.5 w-3.5" />
+                          <span className="truncate max-w-[120px]">{owner} / {repoName}</span>
+                      </div>
+                      <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-bold text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                          #{issue.number}
+                      </span>
                     </div>
-                    <span className="shrink-0 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
-                        #{issue.number}
-                    </span>
+
+                    {/* Issue Title */}
+                    <h2 className="mt-3 line-clamp-2 text-base font-bold leading-snug text-zinc-900 dark:text-zinc-100 group-hover:text-blue-500 transition-colors">
+                      {issue.title}
+                    </h2>
+
+                    {/* 🎯 STRUCTURED DESCRIPTION BLOCK */}
+                    <div className="relative mt-4">
+                      <div className="relative overflow-hidden rounded-xl border border-zinc-100 bg-zinc-50/50 p-4 dark:border-zinc-800/50 dark:bg-zinc-800/30">
+                        {/* Decorative Quote Bar */}
+                        <div className="absolute left-0 top-0 h-full w-1 bg-zinc-200 dark:bg-zinc-700" />
+                        
+                        <p className="line-clamp-4 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400 italic">
+                          {issue.body ? issue.body.replace(/[#*`]/g, '').trim() : 'Explore this repository to understand the requirements for this contribution challenge.'}
+                        </p>
+
+                        {/* Fading Edge */}
+                        <div className="absolute bottom-0 left-0 h-6 w-full bg-gradient-to-t from-zinc-50/80 to-transparent dark:from-zinc-900/40" />
+                      </div>
+                    </div>
                   </div>
-
-                  {/* Title and Description */}
-                  <h2 className="mt-4 line-clamp-2 text-lg font-bold leading-tight text-zinc-900 group-hover:text-blue-600 dark:text-white dark:group-hover:text-blue-400">
-                    {issue.title}
-                  </h2>
-
-                  <p className="mt-3 line-clamp-3 text-sm text-zinc-600 dark:text-zinc-400">
-                    {issue.body || 'No description provided. Click to view more details on the challenge page.'}
-                  </p>
+                
+                  {/* Action Button */}
+                  <div className="mt-6">
+                      <StartChallengeButton 
+                          owner={owner} 
+                          repo={repoName} 
+                          number={issue.number} 
+                      />
+                  </div>
                 </div>
-              
-                {/* Footer Action */}
-               <div className="mt-6 pt-4 border-t border-zinc-100 dark:border-zinc-800/50">
-                    <StartChallengeButton 
-                        owner={owner} 
-                        repo={repoName} 
-                        number={issue.number} 
-                    />
-                </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
         
         {/* Pagination Footer */}
-        <div className="mt-12 flex items-center justify-between">
+        <div className="mt-12 flex items-center justify-between border-t border-zinc-100 pt-8 dark:border-zinc-800">
             <Link 
                 href={hasPreviousPage ? getPaginationLink(currentPage - 1) : '#'}
-                className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-all ${
                     hasPreviousPage 
-                        ? 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800'
-                        : 'border-zinc-100 bg-zinc-50 text-zinc-400 cursor-not-allowed dark:border-zinc-800 dark:bg-zinc-900'
+                        ? 'border-zinc-200 bg-white hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800'
+                        : 'opacity-30 cursor-not-allowed'
                 }`}
             >
-                <ChevronLeft className="h-4 w-4" />
-                Previous
+                <ChevronLeft className="h-4 w-4" /> Previous
             </Link>
 
-            <span className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
-                Page {currentPage}
-            </span>
+            <div className="text-xs font-mono text-zinc-500">
+                PAGE <span className="text-zinc-900 dark:text-white font-bold">{currentPage}</span>
+            </div>
 
             <Link 
                 href={hasNextPage ? getPaginationLink(currentPage + 1) : '#'}
-                className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-all ${
                     hasNextPage 
-                        ? 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800'
-                        : 'border-zinc-100 bg-zinc-50 text-zinc-400 cursor-not-allowed dark:border-zinc-800 dark:bg-zinc-900'
+                        ? 'border-zinc-200 bg-white hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800'
+                        : 'opacity-30 cursor-not-allowed'
                 }`}
             >
-                Next
-                <ChevronRight className="h-4 w-4" />
+                Next <ChevronRight className="h-4 w-4" />
             </Link>
         </div>
-
       </div>
     </div>
   );
